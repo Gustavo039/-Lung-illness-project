@@ -1,0 +1,313 @@
+---
+title: "Exercício: A Matemática da Escolha Social"
+author: "Gustavo Almeida Silva"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+---
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+library(tidyverse)
+library(kableExtra)
+```
+
+# Exercício: 
+Na cidade de Vanilândia ocorre a escolha do novo prefeito, concorrem nessa
+disputa os seguintes candidatos: Abel, Bernardo, Cândida, Daniel, Everaldo e Fernanda. Depois de
+realizada a votação, ocorreu a contagem dos votos, dos quais existiam 10.000 votos válidos, sendo os
+mesmos distribuídos conforme a tabela 11.
+
+Novamente, utilizaremos somente uma letra para identificar cada candidato, onde:
+
+A=Abel, B=Bernardo, C=Cândida, D=Daniel, E=Everaldo e F=Fernanda.
+
+
+![](D:/UFJF_materias\Categoricos/eleicao.png)
+
+```{r}
+# Importacao da tabela
+data=data.frame('1235'=c('A','B','F','E','D','C'),
+                '1536'=c('B','C','D','E','A','F'),
+                '2134'=c('E','F','D','C','B','A'),
+                '1428'=c('C','D','F','E','B','A'),
+                '1665'=c('A','B','D','F','E','C'),
+                '986'=c('D','B','E','C','F','A'),
+                '1016'=c('F','C','A','E','B','D')) |>
+  as_tibble() |>
+  rename('1235'=X1235,
+         '1536'=X1536,
+         '2134'=X2134,
+         '1428'=X1428,
+         '1665'=X1665,
+         '986'=X986,
+         '1016'=X1016)
+
+```
+
+
+# 1 - Método Plural
+
+Neste método, o vencedor é aquele candidato com maior preferência para o primeiro lugar, ou seja, o vencedor poderá ser um candidato que tenha conseguido somente um voto de vantagem em relação ao candidato que conquistou o segundo lugar na disputa.
+
+Assim, utilizando tabela dada:
+
+```{r}
+plural_data=data |>
+            filter(row_number()==1)
+
+matriz_data=data.frame(votes=c(as.numeric(colnames(plural_data))),candidate=c(as.character(plural_data[1,]))) |>
+            group_by(candidate) |>
+            summarise(sum(votes)) |>
+            arrange(desc(`sum(votes)`))
+```
+
+
+```{r}
+matriz_data|>
+  rename(candidato=candidate,'soma de votos'=`sum(votes)`)|>
+  kbl(caption = "Relação candidato Votos") |>
+  kable_classic(full_width = F, html_font = "Cambria") |>
+  kable_styling(latex_options = 'hold_position')
+```
+
+Portanto, o candidato A é o vencedor via Metodo plural
+
+# 2 - Método Dois turnos
+
+Neste método, se nenhum candidato obtiver a maioria absoluta (pelo menos 50% dos votosb + 1 voto), é feita uma segunda eleição, na qual concorrem somente os dois candidatos mais votados no primeiro turno.
+O diferencial deste método para o anterior está na obrigatoriedade de se atingir a maioria absoluta para que um candidato torne-se vencedor no primeiro turno. Caso isso não ocorra, teremos uma nova disputa, somente entre os dois candidatos mais votados para a primeira posição, onde o preferido dos eleitores será o vencedor.
+
+Para saber a proporção de votos do primeiro turno, temos
+
+
+
+```{r}
+prop=matriz_data |>
+  select(`sum(votes)`) |>
+  sapply(function(x)return(x/10000)) |>
+  as_tibble()|>
+  rename(proportion='sum(votes)')
+
+cbind(matriz_data,prop)|>
+  rename(candidato=candidate,'soma de votos'=`sum(votes)`,proporção=proportion)|>
+  kbl(caption = "Relação candidato Votos e Proporção") |>
+  kable_classic(full_width = F, html_font = "Cambria") |>
+  kable_styling(latex_options = 'hold_position')
+```
+
+É possivel ver que nenhum candidato atingiu 50% + 1 votos. Assim um segundo turno é necessário, onde os candidatos A e E se classificaram.
+
+```{r}
+plural_second=sapply(1:7,function(i){
+  ret=which(data[,i]=='A' |data[,i]=='E')
+  r=data[c(ret),i]
+  return(r)
+})|>
+  as_tibble()
+
+matriz_data_second=data.frame(votes=c(as.numeric(colnames(plural_second))),candidate=c(as.character(plural_second[1,]))) |>
+  group_by(candidate) |>
+  summarise(sum(votes)) |>
+  arrange(desc(`sum(votes)`))
+
+prop_second=matriz_data_second |>
+  select(`sum(votes)`) |>
+  sapply(function(x)return(x/10000)) |>
+  as_tibble()|>
+  rename(proportion='sum(votes)')
+```
+
+
+```{r}
+
+cbind(matriz_data_second,prop_second)|>
+  rename(Candidato=candidate,'soma de votos'=`sum(votes)`,proporção=proportion)|>
+  kbl(caption = "Relação candidato Votos e Proporção") |>
+  kable_classic(full_width = F, html_font = "Cambria")|>
+  kable_styling(latex_options = 'hold_position')
+```
+
+
+Portanto, o candidato E é o vencedor via método do Segundo Turno é o candidato E
+
+# 3 - Método Pluralidade com Eliminação
+
+Neste método, se nenhum candidato obtiver a maioria absoluta (pelo menos 50% dos votos + 1 voto), é feita uma segunda eleição na qual não concorre o candidato menos votado para o primeiro lugar. Se ainda assim, nenhum candidato obtiver a maioria absoluta, é realizado um terceiro turno no qual não concorre o menos votado no segundo turno e assim por diante, até que se consiga determinar o vencedor da disputa.
+
+```{r,warning=FALSE}
+data_eliminated=data
+steps=list()
+for(i in 1:5){
+  c=data_eliminated|>
+    filter(row_number()==1)
+  to_be_remove=data.frame(cand=c(as.character(c)),votes=c(as.numeric(colnames(data_eliminated))))|>
+    group_by(cand)|>
+    summarise(sum(votes)) |>
+    rename(votes='sum(votes)')|>
+    slice(which.min(votes))
+  new=data_eliminated|>
+    mutate_if(~ all(nchar(.) <= 1), ~ str_replace_all(., to_be_remove$cand, '')) |>
+    mutate_all(~ ifelse(nchar(.) == 0, NA, .))
+  w=vector()
+    for(k in 1:7){
+      w[k]=new[!is.na(new[,k]),k]
+    }
+  data_eliminated=unlist(w) |>
+                  matrix(byrow=F,nrow = 6-i) |>
+                  as_tibble()|>
+                  rename(`1235`=V1,
+                         `1536`=V2,
+                         `2134`=V3,
+                         `1428`=V4,
+                         `1665`=V5,
+                         `986`=V6,
+                         `1016`=V7
+)
+  
+  steps[i]=data_eliminated
+    
+  
+}
+```
+
+```{r}
+df=data.frame(Candidato=c('C','A','B','E','F','D'),
+              Turno1=c(1428, 2900,1536,2134,1016,986),
+              Turno2=c(1428,2900,2522,2134,1016,'-'),
+              Turno3=c(2444,2900,2522,2134,'-','-'),
+              Turno4=c(4578,2900,2522,'-','-','-'),
+              Turno5=c(7100,2900,'-','-','-','-')
+              )
+```
+
+```{r}
+
+df|>
+  kbl(caption = "Tabela Método da Pluraridade com Eliminação") |>
+  kable_classic(full_width = F, html_font = "Cambria")|>
+  kable_styling(latex_options = 'hold_position')
+
+```
+
+Portanto, o candidato C é o vencedor via Método Pluralidade com Eliminação 
+
+
+# 4 - Método Olímpico Modificado
+
+Este método nada mais é do que uma variante do método anterior, onde, para se obter o vencedor de uma disputa, deve-se eliminar em cada turno o candidato com o maior número de votos para a última colocação, ou seja, aqui os candidatos são eliminados de acordo com a rejeição do eleitorado.
+
+```{r, warning=FALSE}
+data_eliminated=data
+steps=list()
+for(i in 1:5){
+  c=data_eliminated|>
+    filter(row_number()==nrow(data_eliminated))
+  to_be_remove=data.frame(cand=c(as.character(c)),votes=c(as.numeric(colnames(data_eliminated))))|>
+    group_by(cand)|>
+    summarise(sum(votes)) |>
+    rename(votes='sum(votes)')|>
+    slice(which.max(votes))
+  new=data_eliminated|>
+    mutate_if(~ all(nchar(.) <= 1), ~ str_replace_all(., to_be_remove$cand, '')) |>
+    mutate_all(~ ifelse(nchar(.) == 0, NA, .))
+  w=vector()
+  for(k in 1:7){
+    w[k]=new[!is.na(new[,k]),k]
+  }
+  data_eliminated=unlist(w) |>
+    matrix(byrow=F,nrow = 6-i) |>
+    as_tibble()|>
+    rename(`1235`=V1,
+           `1536`=V2,
+           `2134`=V3,
+           `1428`=V4,
+           `1665`=V5,
+           `986`=V6,
+           `1016`=V7
+    )
+  
+  steps[i]=data_eliminated
+  
+  
+}
+
+```
+
+```{r}
+
+data.frame(Candidato=c('F','E','D','C','B','A'),
+              Turno1=c(1536, 0,1016,2900,0,4548),
+              Turno2=c(2522,0,1016,2900,3562,'-'),
+              Turno3=c(2522,1428,1016,5034,'-','-'),
+              Turno4=c(2522,3093,4385,'-','-','-'),
+              Turno5=c(4656,5344,'-','-','-','-')
+              )|>
+  kbl(caption = "Tabela Método Olímpico Modificado") |>
+  kable_classic(full_width = F, html_font = "Cambria")|>
+  kable_styling(latex_options = 'hold_position')
+
+
+```
+
+Portanto, o candidato F é o vencedor via Método Pluralidade com Eliminação 
+
+# 5 - Método de Borda
+
+O Metodo de Borda consiste em um sistema de votação em que, com N candidatos, cada voto para o último lugar valesse um ponto, cada voto para o penúltimo lugar valesse dois pontos,..., cada voto para o primeiro lugar valesse N pontos. Feito isso, o vencedor será o candidato que ao final do processo alcança o maior número de pontos entre os competidores.
+
+```{r}
+cand=data$`1235`
+
+total=vector()            
+index=vector()
+
+for (j in 1:6) {
+  for(i in 1:7){
+    index[i]=which(cand[j]==data[,i])
+    }
+  index=7-index
+  total[j]=sum(index*as.numeric(colnames(data)))
+}
+
+```
+
+```{r}
+df=data.frame(Candidato=cand,Votos=total)|>
+    as_tibble()|>
+    arrange(desc(Votos))
+```
+
+
+```{r}
+df|>
+  kbl(caption = "Tabela Método de Borda") |>
+  kable_classic(full_width = F, html_font = "Cambria") |>
+  kable_styling(latex_options = 'hold_position')
+  
+
+```
+
+
+Portanto, o candidato D é o vencedor via  Método de Borda
+
+# 6 - Método das Comparações Dois a Dois
+
+Neste método vence o candidato que conseguir ganhar mais comparações dois a dois, ou seja, comparamos cada candidato com seus concorrentes, e verificamos qual deles consegue o maior número de vitórias nessas comparações, dando a esse candidato a vitória.
+ 
+![](D:/UFJF_materias\Categoricos/eleicao2.png)
+
+
+
+```{r}
+data.frame(Candidato=c('B','D','F','E','C','A'),
+           'Comparações Vencidas'=c(5,4,3,2,1,0)) |>
+  kbl(caption = "") |>
+  kable_classic(full_width = F, html_font = "Cambria") |>
+  kable_styling(latex_options = 'hold_position')
+```
+
+Portanto, o candidato B é o vencedor via  Método das Comparações Dois a Dois 
+
