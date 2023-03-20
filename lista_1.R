@@ -173,7 +173,7 @@ for(j in 1:6){
   home=cand[j]
   away=cand[j+1]
     for(i in 1:7){
-      data[,i]|>
+      data[,i]
     }
   
 }
