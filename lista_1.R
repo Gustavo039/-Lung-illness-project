@@ -173,7 +173,15 @@ for(j in 1:6){
   home=cand[j]
   away=cand[j+1]
     for(i in 1:7){
-      data[,i]
-    }
+      data[,i]|>
+      group_by(votacao, comb) |>
+      arrange(Candidato1) |>
+      summarise_all(first) |>
+      group_by(Candidato1, Candidato2) |>
+      summarise(
+      `Votação 1` = sum(ifelse(ganhador1, votacao, 0)),
+      `Votação 2` = sum(ifelse(!ganhador1, votacao, 0))
+      )
+          }
   
 }
